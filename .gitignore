@@ -1,0 +1,19 @@
+# Ignore virtual environment
+venv311/
+
+# Python cache files
+__pycache__/
+*.pyc
+
+# Logs
+*.log
+
+# Streamlit cache
+.cache/
+
+# Environment variables
+.env
+
+# Database and output folders
+cache/
+exports/
