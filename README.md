@@ -30,5 +30,6 @@
 1. **Clone this repo**:
 
    ```bash
-   git clone https://github.com/your-username/allytics.git
-   cd allytics
+  git clone https://github.com/aakritidhardubey/Allytics-auto-data-analyst.git
+  cd Allytics-auto-data-analyst
+
