@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 import pandas as pd
 import hashlib
@@ -9,6 +10,9 @@ from utils.db import (
     register_user, authenticate_user,
     save_user_session, load_user_session
 )
+import plotly.express as px
+from matplotlib.figure import Figure
+import plotly.graph_objects as go
 
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
@@ -34,27 +38,6 @@ def clean_column_names(df):
 
 def show_login():
     st.set_page_config(page_title="Login - Allytics", layout="centered")
-    st.markdown("""
-        <style>
-            div.block-container {
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                height: 90vh;
-            }
-            .stButton > button {
-                border-radius: 8px;
-                padding: 0.5rem 1rem;
-                font-size: 16px;
-                background-color: #007ACC;
-                color: white;
-            }
-            .stButton > button:hover {
-                background-color: #005fa3;
-            }
-        </style>
-    """, unsafe_allow_html=True)
-
     st.title("Login to Allytics")
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
@@ -77,27 +60,6 @@ def show_login():
 
 def show_register():
     st.set_page_config(page_title="Register - Allytics", layout="centered")
-    st.markdown("""
-        <style>
-            div.block-container {
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                height: 90vh;
-            }
-            .stButton > button {
-                border-radius: 8px;
-                padding: 0.5rem 1rem;
-                font-size: 16px;
-                background-color: #28a745;
-                color: white;
-            }
-            .stButton > button:hover {
-                background-color: #1e7e34;
-            }
-        </style>
-    """, unsafe_allow_html=True)
-
     st.title("Register to Allytics")
     name = st.text_input("Name")
     username = st.text_input("Username")
@@ -117,93 +79,36 @@ def show_register():
 
 def show_main_app():
     st.set_page_config(page_title="Allytics", layout="wide")
-
-    st.markdown("""
-        <style>
-            .top-bar {
-                display: flex;
-                justify-content: flex-end;
-                padding-right: 1.5rem;
-                margin-bottom: -2rem;
-            }
-            .logout-btn button {
-                border-radius: 8px;
-                background-color: #dc3545;
-                color: white;
-                font-weight: 500;
-                padding: 0.5rem 1rem;
-            }
-            .logout-btn button:hover {
-                background-color: #a71d2a;
-            }
-            .title-container {
-                text-align: center;
-                margin-top: -40px;
-            }
-            .title-container h1 {
-                font-size: 34px;
-                color: #00BFFF;
-                margin-bottom: 0;
-            }
-            .title-container p {
-                font-size: 16px;
-                color: #bbb;
-            }
-        </style>
-    """, unsafe_allow_html=True)
-
-    st.markdown("<div class='top-bar logout-btn'>" + 
-                st.button("Logout", key="logout") * "" + "</div>", 
-                unsafe_allow_html=True)
-
-    if st.session_state.get("logout"):
+    if st.button("Logout", key="logout"):
         save_user_session(st.session_state.username, st.session_state.file_sessions)
         st.session_state.clear()
         st.session_state.page = "login"
         st.rerun()
 
-    st.markdown("""
-        <div class="title-container">
-            <h1>🤖 Allytics</h1>
-            <p>Upload. Ask. Analyze.</p>
-        </div>
-    """, unsafe_allow_html=True)
+    st.title("🤖 Allytics - Upload. Ask. Analyze.")
 
     with st.sidebar:
-        top = st.container()
-        bottom = st.container()
+        st.header("Your Files")
+        uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
+        if uploaded_file:
+            file_id = get_file_id(uploaded_file)
+            if file_id not in st.session_state.file_sessions:
+                df = clean_column_names(pd.read_csv(uploaded_file))
+                st.session_state.file_sessions[file_id] = {"name": uploaded_file.name, "df": df, "agent": None, "chat_history": []}
+            st.session_state.current_file_id = file_id
 
-        with top:
-            st.markdown("## Your Files")
-            uploaded_file = st.file_uploader("Upload files", type=["csv"])
+        for fid, session in st.session_state.file_sessions.items():
+            if st.button(session["name"], key=f"switch_{fid}"):
+                st.session_state.current_file_id = fid
 
-            if uploaded_file:
-                file_id = get_file_id(uploaded_file)
-                if file_id not in st.session_state.file_sessions:
-                    df = pd.read_csv(uploaded_file)
-                    df = clean_column_names(df)
-                    st.session_state.file_sessions[file_id] = {
-                        "name": uploaded_file.name,
-                        "df": df,
-                        "agent": None,
-                        "chat_history": []
-                    }
-                st.session_state.current_file_id = file_id
+        if st.session_state.current_file_id and st.button("🗑️ Delete Current File"):
+            del st.session_state.file_sessions[st.session_state.current_file_id]
+            st.session_state.current_file_id = next(iter(st.session_state.file_sessions), None)
+            st.rerun()
 
-            st.markdown("### Session Files")
-            for fid, session in st.session_state.file_sessions.items():
-                if st.button(session["name"], key=f"switch_{fid}"):
-                    st.session_state.current_file_id = fid
-
-            if st.session_state.current_file_id and st.button("🗑️"):
-                del st.session_state.file_sessions[st.session_state.current_file_id]
-                st.session_state.current_file_id = next(iter(st.session_state.file_sessions), None)
-                st.rerun()
-
-        with bottom:
-            if st.session_state.current_file_id and st.button("🧹 Clear Chat"):
-                st.session_state.file_sessions[st.session_state.current_file_id]["chat_history"] = []
-                st.rerun()
+        if st.session_state.current_file_id and st.button("🧹 Clear Chat"):
+            st.session_state.file_sessions[st.session_state.current_file_id]["chat_history"] = []
+            st.rerun()
 
     if st.session_state.current_file_id:
         current = st.session_state.file_sessions[st.session_state.current_file_id]
@@ -213,6 +118,39 @@ def show_main_app():
         if st.checkbox("Show Data Preview"):
             st.dataframe(df)
             st.write(f"**Shape:** {df.shape[0]} rows × {df.shape[1]} columns")
+        
+        if st.checkbox(" Show Graph "):
+            graph_type = st.selectbox("Select Graph Type", ["Line", "Bar", "Histogram", "Boxplot", "Scatter"])
+            numeric_columns = df.select_dtypes(include=['float64', 'int64']).columns.tolist()
+            all_columns = df.columns.tolist()
+
+            if graph_type in ["Line", "Bar", "Scatter", "Boxplot"]:
+                x_axis = st.selectbox("X-axis", options=all_columns)
+                y_axis = st.selectbox("Y-axis", options=numeric_columns)
+            elif graph_type == "Histogram":
+                x_axis = st.selectbox("Column", options=numeric_columns)
+                y_axis = None
+
+            if st.button("Generate Graph"):
+                st.write(f"### {graph_type} Plot")
+                try:
+                    fig = None
+                    if graph_type == "Line":
+                        fig = px.line(df, x=x_axis, y=y_axis)
+                    elif graph_type == "Bar":
+                        fig = px.bar(df, x=x_axis, y=y_axis)
+                    elif graph_type == "Histogram":
+                        fig = px.histogram(df, x=x_axis)
+                    elif graph_type == "Boxplot":
+                        fig = px.box(df, x=x_axis, y=y_axis)
+                    elif graph_type == "Scatter":
+                        fig = px.scatter(df, x=x_axis, y=y_axis)
+
+                    st.plotly_chart(fig, use_container_width=True)
+
+                except Exception as e:
+                    st.error(f"Error generating graph: {e}")
+
 
         if current["agent"] is None:
             current["agent"] = Agent(df, config={
@@ -222,10 +160,7 @@ def show_main_app():
                 "enable_cache": False,
                 "custom_instructions": """
                 Always provide clear, conversational answers.
-                When showing data results:
-                1. Start with a direct answer
-                2. Add interesting insights
-                3. Avoid raw data dumps
+                Avoid raw data dumps. Prefer names, summaries, and charts.
                 """
             })
 
@@ -234,13 +169,23 @@ def show_main_app():
             with st.chat_message("user"):
                 st.markdown(q)
             with st.chat_message("assistant"):
-                st.markdown(a)
+                if isinstance(a, go.Figure):
+                    st.plotly_chart(a, use_container_width=True)
+                elif isinstance(a, Figure):
+                    st.pyplot(a)
+                elif isinstance(a, str)and os.path.exists(a)  and a.lower().endswith((".png", ".jpg", ".jpeg")):
+                    st.image(a, caption="Generated Chart", use_container_width=True)
+                else:
+                    st.markdown(a)
 
         question = st.chat_input("Type a question...")
         if question:
-            answer = current["agent"].chat(question)
-            current["chat_history"].append((question, answer))
-            st.rerun()
+            if not current["chat_history"] or current["chat_history"][-1][0] != question:
+                answer = current["agent"].chat(question)
+                current["chat_history"].append((question, answer))
+                st.rerun()
+
+
     else:
         st.info("Upload and select a CSV file to begin using Allytics.")
 
