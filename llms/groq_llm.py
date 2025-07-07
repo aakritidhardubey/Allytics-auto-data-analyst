@@ -6,9 +6,7 @@ from pandasai.helpers.logger import Logger
 
 class GroqLLM(LLM):
     def __init__(self, api_key=None, model="llama-3.1-8b-instant"):  # ✅ Changed to faster model
-        """
-        Simple, compatible GroqLLM implementation with rate limit handling
-        """
+        
         self.api_key = api_key or os.getenv("GROQ_API_KEY")
         if not self.api_key:
             raise ValueError("GROQ_API_KEY must be provided")
@@ -50,7 +48,7 @@ class GroqLLM(LLM):
                         }
                     ],
                     "temperature": 0.3,   # Lower temperature for faster processing
-                    "max_tokens": 512     # ✅ Reduced token limit to avoid rate limits
+                    "max_tokens": 512     #  Reduced token limit to avoid rate limits
                 }
                 
                 headers = {
@@ -120,7 +118,7 @@ def test_groq_connection():
     # Check if API key is set
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
-        print("❌ GROQ_API_KEY environment variable not set")
+        print("GROQ_API_KEY environment variable not set")
         print("Please set it with: export GROQ_API_KEY='your_api_key_here'")
         return False
     
@@ -128,10 +126,10 @@ def test_groq_connection():
     try:
         llm = GroqLLM()
         response = llm.call("What is 2+2?")
-        print(f"✅ Direct API test successful: {response}")
+        print(f" Direct API test successful: {response}")
         return True
     except Exception as e:
-        print(f"❌ Direct API test failed: {e}")
+        print(f" Direct API test failed: {e}")
         return False
 
 def test_with_pandasai():
@@ -155,16 +153,16 @@ def test_with_pandasai():
         
         # Test the problematic query
         result = agent.chat("what is max height?")
-        print(f"✅ PandasAI test successful: {result}")
+        print(f"PandasAI test successful: {result}")
         
         # Additional test
         result2 = agent.chat("what is the average height?")
-        print(f"✅ Average height: {result2}")
+        print(f"Average height: {result2}")
         
         return True
         
     except Exception as e:
-        print(f"❌ PandasAI test failed: {e}")
+        print(f"PandasAI test failed: {e}")
         return False
 
 if __name__ == "__main__":
@@ -175,7 +173,7 @@ if __name__ == "__main__":
         # Test 2: With PandasAI
         test_with_pandasai()
     else:
-        print("\n💡 Troubleshooting steps:")
+        print("\nTroubleshooting steps:")
         print("1. Make sure you have a valid Groq API key")
         print("2. Set the environment variable: export GROQ_API_KEY='your_key'")
         print("3. Check your internet connection")
