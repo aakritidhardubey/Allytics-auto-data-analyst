@@ -97,16 +97,45 @@ def show_main_app():
                 st.session_state.file_sessions[file_id] = {"name": uploaded_file.name, "df": df, "agent": None, "chat_history": []}
             st.session_state.current_file_id = file_id
 
+        
+        st.markdown("###  Your  Files")
         for fid, session in st.session_state.file_sessions.items():
-            if st.button(session["name"], key=f"switch_{fid}"):
-                st.session_state.current_file_id = fid
+            for other_fid in list(st.session_state.file_sessions.keys()):
+                if other_fid != fid:
+                    st.session_state[f"menu_open_{other_fid}"] = False
 
-        if st.session_state.current_file_id and st.button("🗑️ Delete Current File"):
-            del st.session_state.file_sessions[st.session_state.current_file_id]
-            st.session_state.current_file_id = next(iter(st.session_state.file_sessions), None)
-            st.rerun()
+            menu_col, icon_col = st.columns([8, 1])
 
-        if st.session_state.current_file_id and st.button("🧹 Clear Chat"):
+            with menu_col:
+                file_label = f" {session['name']}"
+                st.markdown(f'<div class="file-entry">{file_label}</div>', unsafe_allow_html=True)
+                if st.button("Load", key=f"load_{fid}"):
+                    st.session_state.current_file_id = fid
+                    st.rerun()
+
+            with icon_col:
+                if st.button("⋮", key=f"menu_toggle_{fid}"):
+                    current_state = st.session_state.get(f"menu_open_{fid}", False)
+                    for k in list(st.session_state.file_sessions.keys()):
+                        st.session_state[f"menu_open_{k}"] = False
+                    st.session_state[f"menu_open_{fid}"] = not current_state
+
+            if st.session_state.get(f"menu_open_{fid}", False):
+                st.warning("Are you sure you want to delete this file?")
+                confirm_col1, confirm_col2 = st.columns([1, 1])
+                with confirm_col1:
+                    if st.button(" Yes, delete", key=f"confirm_yes_{fid}"):
+                        del st.session_state.file_sessions[fid]
+                        if st.session_state.current_file_id == fid:
+                            st.session_state.current_file_id = next(iter(st.session_state.file_sessions), None)
+                        st.session_state.pop(f"menu_open_{fid}", None)
+                        st.rerun()
+                with confirm_col2:
+                    if st.button("Cancel", key=f"confirm_no_{fid}"):
+                        st.session_state.pop(f"menu_open_{fid}", None)
+                        st.rerun()
+
+        if st.session_state.current_file_id and st.button("Clear Chat"):
             st.session_state.file_sessions[st.session_state.current_file_id]["chat_history"] = []
             st.rerun()
 
