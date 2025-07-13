@@ -1,5 +1,5 @@
 # Ignore virtual environment
-venv311/
+venv/
 
 # Python cache files
 __pycache__/
