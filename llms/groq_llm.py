@@ -3,14 +3,13 @@ import requests
 import time
 from pandasai.llm.base import LLM
 from pandasai.helpers.logger import Logger
-import streamlit as st
 
-GROQ_API_KEY=st.secrets["GROQ_API_KEY"]
 
 class GroqLLM(LLM):
     def __init__(self, api_key=None, model="llama-3.1-8b-instant"):  # ✅ Changed to faster model
         
-        self.api_key = api_key or os.getenv("GROQ_API_KEY")
+        import streamlit as st
+        self.api_key = api_key or st.secrets.get("GROQ_API_KEY")
         if not self.api_key:
             raise ValueError("GROQ_API_KEY must be provided")
         
@@ -168,16 +167,16 @@ def test_with_pandasai():
         print(f"PandasAI test failed: {e}")
         return False
 
-if __name__ == "__main__":
-    print("🚀 Starting Groq LLM tests...")
+# if __name__ == "__main__":
+#     print("🚀 Starting Groq LLM tests...")
     
-    # Test 1: Direct API connection
-    if test_groq_connection():
-        # Test 2: With PandasAI
-        test_with_pandasai()
-    else:
-        print("\nTroubleshooting steps:")
-        print("1. Make sure you have a valid Groq API key")
-        print("2. Set the environment variable: export GROQ_API_KEY='your_key'")
-        print("3. Check your internet connection")
-        print("4. Verify the API key at https://console.groq.com/keys")
+#     # Test 1: Direct API connection
+#     if test_groq_connection():
+#         # Test 2: With PandasAI
+#         test_with_pandasai()
+#     else:
+#         print("\nTroubleshooting steps:")
+#         print("1. Make sure you have a valid Groq API key")
+#         print("2. Set the environment variable: export GROQ_API_KEY='your_key'")
+#         print("3. Check your internet connection")
+#         print("4. Verify the API key at https://console.groq.com/keys")
