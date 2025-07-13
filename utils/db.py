@@ -3,8 +3,9 @@ import os
 import pandas as pd
 import numpy as np
 from io import StringIO
+import streamlit as st
 
-MONGO_URI = os.getenv("MONGO_URI")
+MONGO_URI = st.secrets["MONGO_URI"]
 client = MongoClient(MONGO_URI)
 db = client["allytics"]
 users_collection = db["users"]

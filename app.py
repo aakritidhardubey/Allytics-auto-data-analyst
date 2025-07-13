@@ -14,6 +14,8 @@ import plotly.express as px
 from matplotlib.figure import Figure
 import plotly.graph_objects as go
 
+
+
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 if "page" not in st.session_state:

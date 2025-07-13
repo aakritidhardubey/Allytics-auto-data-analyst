@@ -3,6 +3,9 @@ import requests
 import time
 from pandasai.llm.base import LLM
 from pandasai.helpers.logger import Logger
+import streamlit as st
+
+GROQ_API_KEY=st.secrets["GROQ_API_KEY"]
 
 class GroqLLM(LLM):
     def __init__(self, api_key=None, model="llama-3.1-8b-instant"):  # ✅ Changed to faster model
