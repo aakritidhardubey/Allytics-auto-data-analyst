@@ -17,3 +17,5 @@ __pycache__/
 # Database and output folders
 cache/
 exports/
+
+.streamlit/secrets.toml
