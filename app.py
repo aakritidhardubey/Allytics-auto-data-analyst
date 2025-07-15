@@ -2,20 +2,22 @@ import os
 import streamlit as st
 import pandas as pd
 import hashlib
+import uuid
+import tempfile
+import json
+import io
+import base64
 from PIL import Image
 from pandasai import Agent
 from llms.groq_llm import GroqLLM
 from utils.auth import hash_password, verify_password
-from utils.db import (
-    register_user, authenticate_user,
-    save_user_session, load_user_session
-)
+from utils.db import register_user, authenticate_user, save_user_session, load_user_session
 import plotly.express as px
-from matplotlib.figure import Figure
 import plotly.graph_objects as go
+from matplotlib.figure import Figure
+import matplotlib.pyplot as plt
 
-
-
+# Initialize session state
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 if "page" not in st.session_state:
@@ -37,6 +39,95 @@ def clean_column_names(df):
     df.columns = df.columns.str.replace(r'\s+', '_', regex=True)
     df.columns = df.columns.str.strip()
     return df
+
+def convert_chart_to_base64(answer):
+    """Convert chart to base64 string for reliable storage"""
+    try:
+        if isinstance(answer, go.Figure):
+            # Convert plotly figure to base64 image
+            img_bytes = answer.to_image(format="png", width=800, height=600)
+            img_base64 = base64.b64encode(img_bytes).decode()
+            return {"type": "base64_image", "data": img_base64}
+        elif isinstance(answer, Figure):
+            # Convert matplotlib figure to base64 image
+            buf = io.BytesIO()
+            answer.savefig(buf, format='png', dpi=150, bbox_inches='tight')
+            buf.seek(0)
+            img_base64 = base64.b64encode(buf.read()).decode()
+            buf.close()
+            return {"type": "base64_image", "data": img_base64}
+    except Exception as e:
+        st.warning(f"Could not convert chart: {e}")
+        return {"type": "text", "content": "Chart conversion failed"}
+    return None
+
+def process_and_store_answer(answer):
+    """Process answer and return appropriate storage format"""
+    # Handle chart objects
+    if isinstance(answer, (go.Figure, Figure)):
+        return convert_chart_to_base64(answer)
+    
+    # Handle existing image files
+    elif isinstance(answer, str) and os.path.exists(answer) and answer.lower().endswith((".png", ".jpg", ".jpeg")):
+        try:
+            with open(answer, "rb") as f:
+                img_data = f.read()
+                img_base64 = base64.b64encode(img_data).decode()
+                return {"type": "base64_image", "data": img_base64}
+        except:
+            return {"type": "text", "content": "Image load failed"}
+    
+    # Handle text responses
+    else:
+        return {"type": "text", "content": str(answer)}
+
+def display_stored_answer(stored_answer, index):
+    """Display answer based on its stored format"""
+    if isinstance(stored_answer, dict):
+        if stored_answer["type"] == "base64_image":
+            try:
+                # Display base64 image
+                st.image(
+                    f"data:image/png;base64,{stored_answer['data']}", 
+                    caption=f"Chart #{index+1}", 
+                    use_container_width=True
+                )
+            except Exception as e:
+                st.error(f"Failed to display chart: {e}")
+        elif stored_answer["type"] == "text":
+            st.markdown(stored_answer["content"])
+        elif stored_answer["type"] == "plotly_json":
+            try:
+                fig = go.Figure(json.loads(stored_answer["data"]))
+                st.plotly_chart(fig, use_container_width=True)
+            except:
+                st.error("Failed to display chart")
+    else:
+        # Legacy format handling - convert to new format
+        if isinstance(stored_answer, str) and os.path.exists(stored_answer) and stored_answer.lower().endswith((".png", ".jpg", ".jpeg")):
+            try:
+                with open(stored_answer, "rb") as f:
+                    img_data = f.read()
+                    img_base64 = base64.b64encode(img_data).decode()
+                    st.image(f"data:image/png;base64,{img_base64}", caption=f"Chart #{index+1}", use_container_width=True)
+            except:
+                st.error("Failed to load legacy image")
+        elif isinstance(stored_answer, go.Figure):
+            # Convert legacy plotly figure to base64 and display
+            converted = convert_chart_to_base64(stored_answer)
+            if converted and converted["type"] == "base64_image":
+                st.image(f"data:image/png;base64,{converted['data']}", caption=f"Chart #{index+1}", use_container_width=True)
+            else:
+                st.plotly_chart(stored_answer, use_container_width=True)
+        elif isinstance(stored_answer, Figure):
+            # Convert legacy matplotlib figure to base64 and display
+            converted = convert_chart_to_base64(stored_answer)
+            if converted and converted["type"] == "base64_image":
+                st.image(f"data:image/png;base64,{converted['data']}", caption=f"Chart #{index+1}", use_container_width=True)
+            else:
+                st.pyplot(stored_answer)
+        else:
+            st.markdown(str(stored_answer))
 
 def show_login():
     st.set_page_config(page_title="Login - Allytics", layout="centered")
@@ -96,11 +187,15 @@ def show_main_app():
             file_id = get_file_id(uploaded_file)
             if file_id not in st.session_state.file_sessions:
                 df = clean_column_names(pd.read_csv(uploaded_file))
-                st.session_state.file_sessions[file_id] = {"name": uploaded_file.name, "df": df, "agent": None, "chat_history": []}
+                st.session_state.file_sessions[file_id] = {
+                    "name": uploaded_file.name, 
+                    "df": df, 
+                    "agent": None, 
+                    "chat_history": []
+                }
             st.session_state.current_file_id = file_id
 
-        
-        st.markdown("###  Your  Files")
+        st.markdown("### Your Files")
         for fid, session in st.session_state.file_sessions.items():
             for other_fid in list(st.session_state.file_sessions.keys()):
                 if other_fid != fid:
@@ -150,7 +245,7 @@ def show_main_app():
             st.dataframe(df)
             st.write(f"**Shape:** {df.shape[0]} rows × {df.shape[1]} columns")
         
-        if st.checkbox(" Show Graph "):
+        if st.checkbox("Show Graph"):
             graph_type = st.selectbox("Select Graph Type", ["Line", "Bar", "Histogram", "Boxplot", "Scatter"])
             numeric_columns = df.select_dtypes(include=['float64', 'int64']).columns.tolist()
             all_columns = df.columns.tolist()
@@ -165,7 +260,6 @@ def show_main_app():
             if st.button("Generate Graph"):
                 st.write(f"### {graph_type} Plot")
                 try:
-                    fig = None
                     if graph_type == "Line":
                         fig = px.line(df, x=x_axis, y=y_axis)
                     elif graph_type == "Bar":
@@ -178,10 +272,8 @@ def show_main_app():
                         fig = px.scatter(df, x=x_axis, y=y_axis)
 
                     st.plotly_chart(fig, use_container_width=True)
-
                 except Exception as e:
                     st.error(f"Error generating graph: {e}")
-
 
         if current["agent"] is None:
             current["agent"] = Agent(df, config={
@@ -196,30 +288,52 @@ def show_main_app():
             })
 
         st.write("### Ask Allytics Anything")
-        for q, a in current["chat_history"]:
+        st.write(f"🧠 Chat History: {len(current['chat_history'])} entries")
+
+        # Display chat history
+        for i, (q, a) in enumerate(current["chat_history"]):
             with st.chat_message("user"):
                 st.markdown(q)
             with st.chat_message("assistant"):
-                if isinstance(a, go.Figure):
-                    st.plotly_chart(a, use_container_width=True)
-                elif isinstance(a, Figure):
-                    st.pyplot(a)
-                elif isinstance(a, str)and os.path.exists(a)  and a.lower().endswith((".png", ".jpg", ".jpeg")):
-                    st.image(a, caption="Generated Chart", use_container_width=True)
-                else:
-                    st.markdown(a)
+                st.write(f"↪️ Response #{i+1}")
+                display_stored_answer(a, i)
 
+        # Chat input handling
         question = st.chat_input("Type a question...")
         if question:
-            if not current["chat_history"] or current["chat_history"][-1][0] != question:
-                answer = current["agent"].chat(question)
-                current["chat_history"].append((question, answer))
-                st.rerun()
+            # Check for duplicate questions
+            prev_q = current["chat_history"][-1][0] if current["chat_history"] else None
+            if prev_q == question:
+                st.warning("This question was just asked.")
+                st.stop()
 
+            try:
+                # Get answer from agent
+                answer = current["agent"].chat(question)
+                
+                # IMPORTANT: Process the answer immediately to avoid reference issues
+                processed_answer = process_and_store_answer(answer)
+                
+                # Clear any matplotlib figures to prevent memory leaks
+                if isinstance(answer, Figure):
+                    plt.close(answer)
+                
+                # Add to chat history
+                current["chat_history"].append((question, processed_answer))
+                
+                # Update session state
+                st.session_state.file_sessions[st.session_state.current_file_id] = current
+                
+                st.rerun()
+                
+            except Exception as e:
+                st.error(f"Agent error: {e}")
+                st.stop()
 
     else:
         st.info("Upload and select a CSV file to begin using Allytics.")
 
+# Main app routing
 if st.session_state.page == "login":
     show_login()
 elif st.session_state.page == "register":
