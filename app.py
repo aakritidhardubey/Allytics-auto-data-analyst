@@ -301,24 +301,20 @@ def show_main_app():
         # Chat input handling
         question = st.chat_input("Type a question...")
         if question:
-            # Check for duplicate questions
             prev_q = current["chat_history"][-1][0] if current["chat_history"] else None
             if prev_q == question:
                 st.warning("This question was just asked.")
                 st.stop()
 
             try:
-                # Get answer from agent
                 answer = current["agent"].chat(question)
                 
-                # IMPORTANT: Process the answer immediately to avoid reference issues
                 processed_answer = process_and_store_answer(answer)
                 
                 # Clear any matplotlib figures to prevent memory leaks
                 if isinstance(answer, Figure):
                     plt.close(answer)
                 
-                # Add to chat history
                 current["chat_history"].append((question, processed_answer))
                 
                 # Update session state
